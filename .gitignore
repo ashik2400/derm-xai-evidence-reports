@@ -12,7 +12,7 @@
 *.ckpt
 *.npy
 *.npz
-models/
+/models/
 
 # --- MLflow run logs ---
 mlruns/

@@ -111,6 +111,44 @@ Newest session at the bottom. Each entry: what we did, decisions and why, what i
   - Reading: the gain is real but modest and not certain; CIs overlap. BWV is the most consistent win.
 - `dvc add data/processed` + push. To commit manually: `data/processed.dvc`.
 
+- Fixed `.gitignore`: `models/` also hid `src/models/` (code never committed) -> now `/models/`.
+  Note: mlflow_check.py actually lives in `src/models/utils/`, not `src/utils/`.
+
+---
+
+## Phase 3 — fusion (2026-10-23)
+
+### Decisions (approved)
+- Fusion = late fusion, logistic regression (class_weight balanced, standardised) on 44 NAMED features:
+  dermoscopic 24 (19 concept probs + 5 diagnosis probs), clinical 6 (5 diag probs + clinic_missing),
+  metadata 14 (elevation/location/sex one-hot). Why: small data, and SHAP needs readable features for
+  PubMed queries (RQ1). No embedding fusion, no boosted trees.
+- Frozen vs fine-tuned dermoscopic inputs chosen by TRAIN CV (not valid). Test scored ONCE at the end.
+- Modality removal for RQ2, two kinds: `retrain_without_<g>` (new model without the group) and
+  `occlude_<g>` (final model, group set to train mean = zero contribution after standardising).
+
+### What we did
+- `src/eval/metrics.py`: added `paired_bootstrap_diff` (A - B on the same resampled cases).
+- `src/models/fusion.py` -> `reports/phase3_fusion.md`, `data/processed/preds/fusion.csv`,
+  `data/processed/fusion_features.csv` (input table for SHAP), `models/fusion_lr.joblib`
+  (model + feature names + groups). MLflow experiment `phase3-fusion`.
+
+### Results (TEST, balanced accuracy [95% CI], chance 0.20)
+- Train CV picked fine-tuned (0.606 vs 0.552). Final `fusion_finetuned`, C=0.001:
+  test 0.590 [0.526, 0.660], AUC 0.842. (Valid had preferred frozen fusion 0.650 vs 0.600 - we
+  followed the protocol; valid is noisy.)
+- Best unimodal (picked on valid) = fine-tuned dermoscopic: test 0.570 [0.494, 0.651], AUC 0.884.
+  Fusion - unimodal = +0.019 [-0.059, +0.090], p=0.34 -> NO significant gain from fusion.
+  Fusion AUC is lower than dermoscopic alone (0.842 vs 0.884).
+- Modality removal (fusion minus variant): dermoscopic retrain +0.093 [+0.032, +0.162], occlude +0.175
+  -> dermoscopic carries the model. Clinical: retraining WITHOUT it is slightly better (-0.024) ->
+  clinical adds noise; occlude +0.044. Metadata: +0.026 retrain, +0.011 occlude (small, CIs cross 0).
+- Recall (test): fusion BCC 0.88 vs 0.62 for derm alone (16 cases), but melanoma 0.46 vs 0.54
+  (safety concern: missed melanomas; discuss threshold / cost weighting before reports).
+- `dvc add data/processed` + push. To commit manually: `data/processed.dvc`, `src/models/fusion.py`,
+  `src/eval/metrics.py`, `reports/phase3_fusion.md`, `docs/PROJECT_LOG.md`.
+
 ### Next
-- Phase 3 (needs a plan + approval): fusion classifier. Proposal: compare fusion with frozen vs
-  fine-tuned dermoscopic inputs as one design choice (chosen by train CV, compared on valid).
+- Decide: keep fusion as is, or address melanoma recall (e.g. melanoma-weighted loss/threshold chosen on
+  train CV). Then Phase 4 (SHAP on fusion_lr.joblib + Grad-CAM on effb0_derm_ft_final.pt) - needs plan,
+  and `shap` is not installed yet (ask before installing).

@@ -48,3 +48,24 @@ def bootstrap_ci(y_true, proba, labels, n_boot=1000, seed=42):
     for lab, r in zip(labels, recall_score(y_true, y_pred, labels=labels, average=None, zero_division=0)):
         out[f"recall_{lab.replace(' ', '_')}"] = r
     return out
+
+
+def paired_bootstrap_diff(y_true, proba_a, proba_b, labels, n_boot=1000, seed=42):
+    """Is model A really better than model B on the SAME cases?
+
+    Each bootstrap sample uses the same resampled cases for both models, so the
+    luck of the draw cancels out. Returns the balanced-accuracy difference A - B,
+    its 95% CI, and p = share of samples where A was not better (small p = A wins).
+    """
+    y_true = np.asarray(y_true)
+    labels = np.asarray(list(labels))
+    pa, pb = labels[proba_a.argmax(1)], labels[proba_b.argmax(1)]
+    rng = np.random.default_rng(seed)
+
+    def diff(idx):
+        return balanced_accuracy_score(y_true[idx], pa[idx]) - balanced_accuracy_score(y_true[idx], pb[idx])
+
+    point = diff(np.arange(len(y_true)))
+    boots = np.array([diff(rng.integers(0, len(y_true), len(y_true))) for _ in range(n_boot)])
+    lo, hi = np.percentile(boots, [2.5, 97.5])
+    return {"diff": point, "diff_lo": lo, "diff_hi": hi, "p": float((boots <= 0).mean())}
