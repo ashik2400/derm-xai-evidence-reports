@@ -189,7 +189,46 @@ Newest session at the bottom. Each entry: what we did, decisions and why, what i
 - `dvc add data/processed` + push. To commit manually: `data/processed.dvc`, `src/explain/`,
   `reports/phase4_*.md`, `reports/figures/phase4_*.png`, `docs/PROJECT_LOG.md`.
 
+### Next (after Phase 4)
+- Phase 5 (done below).
+
+---
+
+## Phase 5 — PubMed evidence retrieval (2026-10-23)
+
+### Decisions (approved)
+- 3 RQ1 arms, same budget (6 abstracts per case): `shap` (top 3 searchable positive-SHAP factors, one
+  query each), `random` (3 searchable factors SHAP did NOT pick, seeded per case), `diagnosis` (predicted
+  diagnosis only). Refinement made during the step: random draws from all 13 factors minus SHAP's picks
+  (first version drew from the stored top-8 and often repeated SHAP's factors).
+- Query = <diagnosis> AND <factor term> AND (dermoscopy OR dermatoscopy OR dermoscopic); filters English,
+  has abstract, humans, not retracted; top 20; fallback without the dermoscopy term if < 3 hits.
+- Hand-written term dictionary (`src/retrieval/queries.py`); only PREDICTED concept values are used.
+  Not searchable: image-model diagnoses, sex, flat/palpable, clinic_missing. "Absent" values search the
+  sign in general. Diagnosis "miscellaneous" = lentigo/dermatofibroma/vascular lesion/angioma/melanosis.
+- Re-ranking: MedCPT cross-encoder (`ncbi/MedCPT-Cross-Encoder`); installed `transformers` 5.20.
+- NCBI identity: NCBI_EMAIL / NCBI_API_KEY read from .env (Ashik to add). This run had no .env ->
+  tool name only, 3 requests/s. All answers cached, so reruns do not hit NCBI.
+
+### What we did
+- `src/retrieval/pubmed.py` (esearch/efetch + disk cache), `queries.py`, `rerank.py`, `retrieve.py`.
+- `src/explain/shap_fusion.py` now also stores `all` 13 factors per case in explanations.jsonl (rerun;
+  results unchanged).
+- Outputs: `data/processed/pubmed/evidence.jsonl` (case x arm: queries + chosen PMIDs + scores),
+  `abstracts.json`, `cache/`, `rerank_scores.json`; `reports/phase5_retrieval.md`; MLflow `phase5-retrieval`.
+
+### Results (test, 395 cases)
+- 136 unique queries, 736 unique abstracts, retrieved 2026-10-23. Fallback: shap 2%, random 7%, diagnosis 0%.
+- Diagnosis named in abstracts: shap 0.94, random 0.97, diagnosis 0.96.
+- SHAP-factor coverage (case's SHAP factors named in its evidence): shap 0.98 (by construction),
+  random 0.47, diagnosis 0.36.
+- Diagnosis arm: only 25 distinct PMIDs across all cases (same few per diagnosis), 71% reviews, median 2020;
+  shap arm 114 distinct PMIDs, 17% reviews, median 2015. Arms barely overlap (Jaccard <= 0.05).
+- MedCPT changes PubMed's order a lot: shap arm kept docs had mean PubMed rank 7.6, 23% from ranks > 10.
+- Seen by eye: a "systematic review protocol" abstract (PMID 40633957) was kept -> protocols carry no
+  findings; consider filtering in Phase 6 or note as a limitation.
+
 ### Next
-- Phase 5 (needs plan + approval): PubMed retrieval (E-utilities esearch + efetch) from the top SHAP
-  concept/metadata factors, plus the diagnosis-only baseline queries for RQ1. Decide query templates,
-  number of abstracts, ranking, caching, and NCBI API key/rate limits.
+- Phase 6 (needs plan + approval): Groq LLM reports from evidence only, then evals (SHAP faithfulness,
+  citation grounding, hallucination rate, consistency, LLM-judge usefulness, safety). Decide model,
+  number of cases (Groq rate limits), prompt, judge model, and the RQ1 comparison design.

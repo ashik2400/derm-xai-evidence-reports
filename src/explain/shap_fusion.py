@@ -116,6 +116,7 @@ def main():
                 "pred": classes[pred[i]], "proba": {c: round(float(p), 3) for c, p in zip(classes, proba[i])},
                 "supporting": [item(j) for j in ranked if own[i, j] > 0][:5],
                 "opposing": [item(j) for j in ranked[::-1] if own[i, j] < 0][:3],
+                "all": [item(j) for j in ranked],                       # all 13 factors, most supporting first
             }) + "\n")
 
     # 3. global importance on TEST: mean |SHAP| toward the predicted class
