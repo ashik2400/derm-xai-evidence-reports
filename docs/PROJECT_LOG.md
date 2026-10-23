@@ -148,7 +148,48 @@ Newest session at the bottom. Each entry: what we did, decisions and why, what i
 - `dvc add data/processed` + push. To commit manually: `data/processed.dvc`, `src/models/fusion.py`,
   `src/eval/metrics.py`, `reports/phase3_fusion.md`, `docs/PROJECT_LOG.md`.
 
+### Next (after Phase 3)
+- Melanoma recall: deferred to Phase 7 as a labelled post-hoc variant (decided at Phase 4 start).
+
+---
+
+## Phase 4 — explanations (2026-10-23)
+
+### Decisions (approved)
+- Installed `shap` 0.51 (+ numba, llvmlite). SHAP = shap.LinearExplainer (exact for LR), background = train
+  rows, log-odds units, explained toward each case's PREDICTED class. Cross-checked with the hand formula.
+- Grad-CAM: own code (no install), last feature map (7x7) of the fine-tuned dermoscopic network.
+- Melanoma recall issue deferred to Phase 7.
+
+### What we did
+- `src/explain/factors.py`: groups the 44 columns into 13 readable factors (7 concepts, 2 image-model
+  diagnoses, clinic_missing, elevation, location, sex); factor SHAP = sum of its columns.
+- `src/explain/shap_fusion.py` -> `reports/phase4_shap.md`, figures `phase4_shap_*.png`,
+  `data/processed/explanations/shap_values.npy` (cases x classes x features) and `explanations.jsonl`
+  (valid + test: top 5 supporting / 3 opposing factors, plain value + `driver` column). MLflow `phase4-explain`.
+  - Bug found and fixed: the image-model factors were labelled with their TOP class ("clinical model says nevus")
+    while the push came from P(melanoma) -> misleading. Now labelled with P(explained class) + driver field.
+- `src/explain/gradcam.py` -> `reports/phase4_gradcam.md`, figures `phase4_gradcam_{1,2}.png`,
+  `data/processed/explanations/gradcam_shortcut.csv`.
+  - Bug found and fixed: "dark pixels" also counted dark lesions (melanomas!) as border. Now only dark regions
+    connected to the image edge count.
+- `reports/phase4_summary.md`: hand-written interpretation (read this first).
+
+### Results
+- SHAP checks exact. Top factors: dermoscopic-model diagnosis, clinical-model diagnosis, vascular, elevation.
+  A concept is in the top 3 supporting factors for 331/395 test cases.
+- Deletion test: top-k SHAP factors beat random in 100% of cases (expected for a linear model).
+- RQ2: SHAP modality ranking derm > clinical > metadata = occlusion ranking; retraining ranking is
+  derm > metadata > clinical. Factor level Spearman rho 0.82 (p 0.001) vs occlusion drop.
+  SHAP shows reliance of this model, not necessity of the modality (clinical is redundant).
+- Fusion probabilities are flat (median top prob 0.31) -> not usable as confidence; calibrate in Phase 7.
+- Grad-CAM: heat mostly on lesion (20% in outer frame vs 36% area); wrong cases more off-lesion (0.27 vs 0.16,
+  p 1.5e-10, confounded by class). Dark border rare after centre crop (9/395). Artefacts by eye: ruler (983),
+  grid (944), bubble (996).
+- `dvc add data/processed` + push. To commit manually: `data/processed.dvc`, `src/explain/`,
+  `reports/phase4_*.md`, `reports/figures/phase4_*.png`, `docs/PROJECT_LOG.md`.
+
 ### Next
-- Decide: keep fusion as is, or address melanoma recall (e.g. melanoma-weighted loss/threshold chosen on
-  train CV). Then Phase 4 (SHAP on fusion_lr.joblib + Grad-CAM on effb0_derm_ft_final.pt) - needs plan,
-  and `shap` is not installed yet (ask before installing).
+- Phase 5 (needs plan + approval): PubMed retrieval (E-utilities esearch + efetch) from the top SHAP
+  concept/metadata factors, plus the diagnosis-only baseline queries for RQ1. Decide query templates,
+  number of abstracts, ranking, caching, and NCBI API key/rate limits.
