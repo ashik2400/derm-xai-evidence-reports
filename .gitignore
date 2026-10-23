@@ -1,5 +1,33 @@
-@"
-.ipynb_checkpoints/
-__pycache__/
+# --- Secrets (never commit) ---
+.env
+.env.*
+
+# --- Data: tracked by DVC, not git ---
+/data/raw/
+/data/processed/
+
+# --- Model weights and cached embeddings ---
+*.pt
+*.pth
+*.ckpt
+*.npy
+*.npz
+models/
+
+# --- MLflow run logs ---
 mlruns/
-"@ | Set-Content .gitignore
+mlartifacts/
+mlflow.db
+
+# --- Python / Jupyter clutter ---
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# --- Editor / OS files ---
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+CLAUDE.md
